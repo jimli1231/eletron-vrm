@@ -89,7 +89,8 @@ const buttons = [
     { label: '打招呼', id: 'btn-greet' },
     { label: '开心', id: 'btn-happy' },
     { label: '生气', id: 'btn-angry' },
-    { label: 'Idle', id: 'btn-idle' }
+    { label: 'Idle', id: 'btn-idle' },
+    { label: '双手', id: 'btn-hands' }
 ];
 
 buttons.forEach(btn => {
@@ -365,6 +366,12 @@ loader.load(
              const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
              if (rArm) rArm.rotation.set(0,0,0);
              if (rForeArm) rForeArm.rotation.set(0,0,0);
+        });
+        document.getElementById('btn-hands').addEventListener('click', () => {
+             // Simulate a request to use automation
+             if (window.electronAPI) {
+                 window.electronAPI.sendChat("Adjust the brightness up, please.");
+             }
         });
         // ------------------------
 

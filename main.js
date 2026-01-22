@@ -2,6 +2,7 @@ require('dotenv').config({ override: true })
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const LLMService = require('./src/main/llm')
+const automation = require('./src/main/automation')
 
 // Init LLM
 console.log('Main Process API Key:', process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 10) + '...' : 'UNDEFINED')
@@ -62,6 +63,17 @@ const createWindow = () => {
 
     llm.on('emotion', (emotion) => {
         win.webContents.send('llm:emotion', emotion)
+    })
+
+    llm.on('action', async (action) => {
+        console.log('LLM Action:', action)
+        if (action.tool === 'adjust_brightness') {
+            await automation.adjustBrightness(action.args.direction)
+        } else if (action.tool === 'type_text') {
+            await automation.typeText(action.args.text)
+        } else if (action.tool === 'click_image') {
+            await automation.clickImage(action.args.template)
+        }
     })
 
     // Auto-test
