@@ -47,43 +47,22 @@ class LLMService extends EventEmitter {
                 responseType: 'stream'
             });
 
-            let buffer = '';
-            let speechEmittedIndex = 0;
-            let finalJson = {};
+            this.rawBuffer = '';
 
             response.data.on('data', (chunk) => {
                 const textChunk = chunk.toString();
-                buffer += textChunk;
-
-                // Gemini stream returns JSON array of chunks like [{candidates:...}]
-                // But raw text might be broken.
-                // We need to extract the "text" field from the response structures.
-                // Actually, the stream returns standard JSON objects separated by something or just appended?
-                // Standard Gemini stream API returns specific JSON structure per line or block.
-                // Let's assume standard "data: " SSE format or just concatenated JSONs? 
-                // Axios stream for Gemini usually returns a list of JSON objects (Candidate objects).
-
-                // Simple parsing strategy for "speech" extraction from the raw accumulating text *inside* the logical JSON content.
-                // We first need to parse the API envelope to get the actual generated text.
-
-                // NOTE: Parsing the API stream chunk-by-chunk is tricky because a chunk might split a JSON token.
-                // A robust way for this demo:
-                // 1. Accumulate raw buffer.
-                // 2. Try to find "text": "..." content in the buffer.
-                // 3. Extract that content into a 'virtual' response string.
-                // 4. Parse that virtual response string for the user-facing JSON.
-
-                this.parseStreamChunk(textChunk);
+                this.rawBuffer += textChunk;
+                this.processRawBuffer();
             });
 
             response.data.on('end', () => {
                 this.emit('end');
+                this.rawBuffer = '';
             });
 
         } catch (error) {
             let errorMessage = error.message;
             if (error.response) {
-                // If response is a stream, we need to read it to see the error
                 if (error.response.data && typeof error.response.data.on === 'function') {
                     try {
                         const errorBody = await new Promise((resolve, reject) => {
@@ -105,45 +84,42 @@ class LLMService extends EventEmitter {
         }
     }
 
-    // Simplified buffer for the *content* of the response
+    // Buffer for raw API stream to handle split tokens
+    rawBuffer = '';
+    // Buffer for the *content* of the response
     accumulatedResponse = '';
+    emittedSpeechLen = 0;
 
-    parseStreamChunk(chunk) {
-        // This is a naive implementation. In reality, you'd parse the SSE/JSON structure.
-        // Gemini REST API returns a JSON array of objects if not using SSE, or multiple JSON objects.
-        // Let's try to grab valid JSON blocks from the raw stream.
-        // The raw stream from axios will receive parts of the response array.
-        // E.g. [, {\n "candidates": [...] } , ... 
+    processRawBuffer() {
+        // Regex to hunt for "text": "..." content
+        // This is heuristic but works for Gemini's standard stream format
+        const regex = /"text":\s*"((?:[^"\\]|\\.)*)"/g;
+        let match;
+        let lastIndex = 0;
 
-        // For the sake of this task ("Show me you can do it"), let's implement a heuristic.
-        // We will maintain a growing string of the "text" field found in the candidates.
-
-        // Remove [ ] and delimiters to find objects
-        // This is fragile but fast for a demo.
-
-        // Better: Accumulate all text, regex for "text": "(...)"
-
-        // We really want the *inner* JSON (the speech).
-        // Let's assume we can reconstruct the inner text.
-
-        // 1. Extract 'text' value from the API response chunk
-        // 2. Append to this.accumulatedResponse
-        // 3. Scan this.accumulatedResponse for "speech": "..."
-
-        const textMatches = chunk.matchAll(/"text":\s*"((?:[^"\\]|\\.)*)"/g);
-        for (const match of textMatches) {
+        while ((match = regex.exec(this.rawBuffer)) !== null) {
             let contentFragment = match[1];
             // Unescape JSON string
             try {
+                // JSON.parse to handle escaped quotes/newlines correctly
                 contentFragment = JSON.parse(`"${contentFragment}"`);
             } catch (e) {
-                // If incomplete escape, ignore for now or handle
+                // Incomplete escape sequence? 
             }
             this.accumulatedResponse += contentFragment;
+            lastIndex = regex.lastIndex;
+
+            this.parseAccumulatedSpeech();
         }
 
-        // Now scan for speech in accumulatedResponse
-        // We want to emit NEW speech characters.
+        // Remove processed parts from buffer to keep memory low
+        if (lastIndex > 0) {
+            this.rawBuffer = this.rawBuffer.slice(lastIndex);
+        }
+    }
+
+    parseAccumulatedSpeech() {
+        // Scan for speech in accumulatedResponse
         const speechMatch = this.accumulatedResponse.match(/"speech":\s*"((?:[^"\\]|\\.)*)/);
         if (speechMatch) {
             const currentTotalSpeech = speechMatch[1];
@@ -154,11 +130,15 @@ class LLMService extends EventEmitter {
             }
         }
 
-        // Check for emotion/action (usually come after speech or are short)
-        // ...
+        // Scan for emotion
+        const emotionMatch = this.accumulatedResponse.match(/"emotion":\s*"([^"]+)"/);
+        if (emotionMatch && emotionMatch[1] !== this.emittedEmotion) {
+            this.emittedEmotion = emotionMatch[1];
+            this.emit('emotion', this.emittedEmotion);
+        }
     }
 
-    emittedSpeechLen = 0;
+    emittedEmotion = null;
 }
 
 module.exports = LLMService;
