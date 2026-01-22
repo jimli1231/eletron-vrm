@@ -1,0 +1,28 @@
+{
+  "name": "eletron-vrm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "start": "electron .",
+    "dev:all": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "8.2.2",
+    "electron": "^40.0.0",
+    "vite": "4",
+    "wait-on": "7.2.0"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "^3.4.5",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "three": "^0.182.0"
+  }
+}
