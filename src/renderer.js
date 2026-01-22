@@ -7,7 +7,7 @@ const scene = new THREE.Scene();
 // scene.background = new THREE.Color(0x333333); // Remove background color for transparency
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-camera.position.set(0.0, 1.0, 5.0);
+camera.position.set(0.0, 1.0, 3.0); // 相机更近
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setClearColor(0x000000, 0); // Transparent clear color
@@ -203,9 +203,6 @@ loader.load(
         scene.add(vrm.scene);
         console.log('VRM Loaded!');
 
-        // Look straight ahead
-        vrm.humanoid.getNormalizedBoneNode('neck').rotation.y = Math.PI;
-
         // --- GHOST MODE: Raycaster Init ---
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
@@ -246,23 +243,23 @@ loader.load(
 
             // 2. ANIMATION ACTIONS
             if (currentAction === 'GREET') {
-                 // Wave Right Arm
-                 // Basic wave: Rotate arm up and wave forearm
-                 const wave = Math.sin(elapsedTime * 15.0);
-                 const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-                 const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+                // Wave Right Arm
+                // Basic wave: Rotate arm up and wave forearm
+                const wave = Math.sin(elapsedTime * 15.0);
+                const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
 
-                 if (rArm) rArm.rotation.z = Math.PI * 0.85; // Raise arm
-                 if (rForeArm) rForeArm.rotation.z = Math.PI * 0.1 + wave * 0.2; // Wave forearm
+                if (rArm) rArm.rotation.z = Math.PI * 0.85; // Raise arm
+                if (rForeArm) rForeArm.rotation.z = Math.PI * 0.1 + wave * 0.2; // Wave forearm
 
-                 // Auto-return to idle after 2.5 seconds
-                 actionTimer += deltaTime;
-                 if (actionTimer > 2.5) {
-                     currentAction = 'IDLE';
-                     // Reset rotations will happen in IDLE frame or naturally blend if we had blending
-                     if (rArm) rArm.rotation.z = 0;
-                     if (rForeArm) rForeArm.rotation.z = 0;
-                 }
+                // Auto-return to idle after 2.5 seconds
+                actionTimer += deltaTime;
+                if (actionTimer > 2.5) {
+                    currentAction = 'IDLE';
+                    // Reset rotations will happen in IDLE frame or naturally blend if we had blending
+                    if (rArm) rArm.rotation.z = 0;
+                    if (rForeArm) rForeArm.rotation.z = 0;
+                }
             } else {
                 // IDLE: Breathing
                 const s = Math.sin(elapsedTime * 1.0) * 0.05;
@@ -341,31 +338,31 @@ loader.load(
 
         // --- BUTTON LISTENERS ---
         document.getElementById('btn-talk').addEventListener('click', () => {
-             inputBox.focus();
+            inputBox.focus();
         });
         document.getElementById('btn-model-talk').addEventListener('click', () => {
-             // Mock response
-             speakText("你好，很高兴见到你。");
-             window.setTalkingState(true);
+            // Mock response
+            speakText("你好，很高兴见到你。");
+            window.setTalkingState(true);
         });
         document.getElementById('btn-greet').addEventListener('click', () => {
-             currentAction = 'GREET';
-             actionTimer = 0;
+            currentAction = 'GREET';
+            actionTimer = 0;
         });
         document.getElementById('btn-happy').addEventListener('click', () => {
-             window.setEmotion('JOY');
+            window.setEmotion('JOY');
         });
         document.getElementById('btn-angry').addEventListener('click', () => {
-             window.setEmotion('ANGRY');
+            window.setEmotion('ANGRY');
         });
         document.getElementById('btn-idle').addEventListener('click', () => {
-             currentAction = 'IDLE';
-             window.setEmotion('NEUTRAL');
-             // Hard reset arms
-             const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-             const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-             if (rArm) rArm.rotation.set(0,0,0);
-             if (rForeArm) rForeArm.rotation.set(0,0,0);
+            currentAction = 'IDLE';
+            window.setEmotion('NEUTRAL');
+            // Hard reset arms
+            const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+            if (rArm) rArm.rotation.set(0, 0, 0);
+            if (rForeArm) rForeArm.rotation.set(0, 0, 0);
         });
         document.getElementById('btn-hands').addEventListener('click', () => {
              // Simulate a request to use automation
@@ -410,22 +407,38 @@ loader.load(
 
         // --- DRAG LOGIC ---
         let isDragging = false;
+        let isWindowDragging = false; // Alt+拖动移动窗口
         let lastMouseX = 0;
         let lastMouseY = 0;
+        let modelRotationY = Math.PI; // 初始旋转角度（模型面向摄像机）
 
         renderer.domElement.addEventListener('mousedown', (e) => {
             // Only start drag if hovering model
             if (isHovering) {
-                isDragging = true;
+                if (e.altKey) {
+                    // Alt+左键 = 移动窗口
+                    isWindowDragging = true;
+                } else {
+                    // 普通左键 = 旋转模型
+                    isDragging = true;
+                }
                 lastMouseX = e.screenX;
                 lastMouseY = e.screenY;
             }
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (isDragging && window.electronAPI) {
-                const dx = e.screenX - lastMouseX;
-                const dy = e.screenY - lastMouseY;
+            const dx = e.screenX - lastMouseX;
+            const dy = e.screenY - lastMouseY;
+
+            if (isDragging) {
+                // 旋转模型（水平拖动控制 Y 轴旋转）
+                modelRotationY += dx * 0.01;
+                vrm.scene.rotation.y = modelRotationY;
+                lastMouseX = e.screenX;
+                lastMouseY = e.screenY;
+            } else if (isWindowDragging && window.electronAPI) {
+                // 移动窗口
                 window.electronAPI.moveWindow(dx, dy);
                 lastMouseX = e.screenX;
                 lastMouseY = e.screenY;
@@ -434,6 +447,7 @@ loader.load(
 
         window.addEventListener('mouseup', () => {
             isDragging = false;
+            isWindowDragging = false;
         });
         // ------------------
     },
