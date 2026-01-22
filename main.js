@@ -72,6 +72,7 @@ const createWindow = () => {
 
     llm.on('error', (err) => {
         console.error(err)
+        win.webContents.send('llm:error', err.toString())
     })
 
     // Load from Vite dev server

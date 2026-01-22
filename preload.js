@@ -11,7 +11,8 @@ window.electronAPI = {
     sendChat: (msg) => ipcRenderer.send('chat:send', msg),
     onSpeechDelta: (callback) => ipcRenderer.on('llm:speech-delta', (event, delta) => callback(delta)),
     moveWindow: (dx, dy) => ipcRenderer.send('move-window', dx, dy),
-    onEmotion: (callback) => ipcRenderer.on('llm:emotion', (event, emotion) => callback(emotion))
+    onEmotion: (callback) => ipcRenderer.on('llm:emotion', (event, emotion) => callback(emotion)),
+    onLLMError: (callback) => ipcRenderer.on('llm:error', (event, err) => callback(err))
 }
 
 window.addEventListener('DOMContentLoaded', () => {
