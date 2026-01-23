@@ -1,6 +1,11 @@
 const axios = require('axios');
 const { EventEmitter } = require('events');
 
+// Regex constants
+const TEXT_REGEX = /"text":\s*"((?:[^"\\]|\\.)*)"/g;
+const SPEECH_REGEX = /"speech":\s*"((?:[^"\\]|\\.)*)/;
+const EMOTION_REGEX = /"emotion":\s*"([^"]+)"/;
+
 class LLMService extends EventEmitter {
     constructor(apiKey) {
         super();
@@ -93,11 +98,11 @@ class LLMService extends EventEmitter {
     processRawBuffer() {
         // Regex to hunt for "text": "..." content
         // This is heuristic but works for Gemini's standard stream format
-        const regex = /"text":\s*"((?:[^"\\]|\\.)*)"/g;
+        TEXT_REGEX.lastIndex = 0;
         let match;
         let lastIndex = 0;
 
-        while ((match = regex.exec(this.rawBuffer)) !== null) {
+        while ((match = TEXT_REGEX.exec(this.rawBuffer)) !== null) {
             let contentFragment = match[1];
             // Unescape JSON string
             try {
@@ -107,7 +112,7 @@ class LLMService extends EventEmitter {
                 // Incomplete escape sequence? 
             }
             this.accumulatedResponse += contentFragment;
-            lastIndex = regex.lastIndex;
+            lastIndex = TEXT_REGEX.lastIndex;
 
             this.parseAccumulatedSpeech();
         }
@@ -120,7 +125,7 @@ class LLMService extends EventEmitter {
 
     parseAccumulatedSpeech() {
         // Scan for speech in accumulatedResponse
-        const speechMatch = this.accumulatedResponse.match(/"speech":\s*"((?:[^"\\]|\\.)*)/);
+        const speechMatch = this.accumulatedResponse.match(SPEECH_REGEX);
         if (speechMatch) {
             const currentTotalSpeech = speechMatch[1];
             if (currentTotalSpeech.length > this.emittedSpeechLen) {
@@ -131,7 +136,7 @@ class LLMService extends EventEmitter {
         }
 
         // Scan for emotion
-        const emotionMatch = this.accumulatedResponse.match(/"emotion":\s*"([^"]+)"/);
+        const emotionMatch = this.accumulatedResponse.match(EMOTION_REGEX);
         if (emotionMatch && emotionMatch[1] !== this.emittedEmotion) {
             this.emittedEmotion = emotionMatch[1];
             this.emit('emotion', this.emittedEmotion);
