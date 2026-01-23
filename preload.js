@@ -12,7 +12,12 @@ window.electronAPI = {
     clearHistory: () => ipcRenderer.send('chat:clear-history'),
     onSpeechDelta: (callback) => ipcRenderer.on('llm:speech-delta', (event, delta) => callback(delta)),
     moveWindow: (dx, dy) => ipcRenderer.send('move-window', dx, dy),
+    setResolution: (w, h) => ipcRenderer.send('set-resolution', w, h),
+
+    // Events
+    onSpeechDelta: (callback) => ipcRenderer.on('llm:speech-delta', (event, delta) => callback(delta)),
     onEmotion: (callback) => ipcRenderer.on('llm:emotion', (event, emotion) => callback(emotion)),
+    onAction: (callback) => ipcRenderer.on('llm:action', (event, action) => callback(action)),
     onLLMError: (callback) => ipcRenderer.on('llm:error', (event, err) => callback(err))
 }
 

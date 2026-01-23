@@ -1,9 +1,11 @@
 const { screen, mouse, keyboard, Key, centerOf, imageResource } = require('@nut-tree-fork/nut-js');
+const os = require('os');
 
 class AutomationService {
     constructor() {
         // Config defaults if needed
         keyboard.config.autoDelayMs = 10;
+        this.platform = os.platform();
     }
 
     async clickImage(imagePath) {
@@ -35,13 +37,31 @@ class AutomationService {
 
     async adjustBrightness(direction) {
         try {
-            const key = direction === 'up' ? Key.F2 : Key.F1;
-            console.log(`Automation: Adjusting brightness ${direction} (Key: ${key})...`);
-            await keyboard.pressKey(key);
-            await keyboard.releaseKey(key);
+            console.log(`Automation: Adjusting brightness ${direction} on ${this.platform}...`);
+
+            if (this.platform === 'darwin') {
+                const key = direction === 'up' ? Key.F2 : Key.F1;
+                await keyboard.pressKey(key);
+                await keyboard.releaseKey(key);
+            } else {
+                console.warn('Brightness control not fully implemented for this OS via simple keys.');
+                // Placeholder for Windows PowerShell WMI implementation
+            }
             return true;
         } catch (error) {
             console.error('Automation Error (adjustBrightness):', error);
+            return false;
+        }
+    }
+
+    async setResolution(width, height) {
+        try {
+            console.log(`Automation: Setting resolution to ${width}x${height} on ${this.platform}...`);
+            // Real implementation requires 'displayplacer' (Mac) or 'QRes' (Windows)
+            // exec(`displayplacer "id:main res:${width}x${height}"`);
+            return true;
+        } catch (error) {
+            console.error('Automation Error (setResolution):', error);
             return false;
         }
     }

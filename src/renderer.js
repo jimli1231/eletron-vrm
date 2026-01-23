@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+import { AnimationController } from './AnimationController.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -14,7 +15,6 @@ renderer.setClearColor(0x000000, 0); // Transparent clear color
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 // Important for VRM: sRGB encoding
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -71,15 +71,79 @@ inputBox.addEventListener('keypress', (e) => {
     }
 });
 
-chatContainer.appendChild(inputBox);
+// --- VOICE BUTTON START ---
+const voiceBtn = document.createElement('button');
+voiceBtn.innerText = '🎙️';
+voiceBtn.style.marginLeft = '5px';
+voiceBtn.style.padding = '8px';
+voiceBtn.style.borderRadius = '5px';
+voiceBtn.style.border = 'none';
+voiceBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+voiceBtn.style.cursor = 'pointer';
+
+// Mouse ignore logic
+voiceBtn.addEventListener('mouseenter', () => {
+    if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+});
+
+// Speech Recognition Logic
+let recognition = null;
+if ('webkitSpeechRecognition' in window) {
+    // eslint-disable-next-line no-undef
+    recognition = new webkitSpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+        voiceBtn.style.backgroundColor = '#ffcccc'; // Visual feedback
+        outputBox.innerText = 'Listening...';
+    };
+
+    recognition.onend = () => {
+        voiceBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+            inputBox.value = transcript;
+            // Auto-send
+            if (window.electronAPI) {
+                window.electronAPI.sendChat(transcript);
+                inputBox.value = '';
+            }
+        }
+    };
+
+    voiceBtn.addEventListener('mousedown', () => recognition.start());
+    voiceBtn.addEventListener('mouseup', () => recognition.stop());
+    // Also handle touch events for touchscreens
+    voiceBtn.addEventListener('touchstart', (e) => { e.preventDefault(); recognition.start(); });
+    voiceBtn.addEventListener('touchend', (e) => { e.preventDefault(); recognition.stop(); });
+
+} else {
+    voiceBtn.disabled = true;
+    voiceBtn.title = "Speech recognition not supported";
+}
+
+// Wrap input and button in a row
+const inputRow = document.createElement('div');
+inputRow.style.display = 'flex';
+inputRow.style.width = '100%';
+inputRow.appendChild(inputBox);
+inputRow.appendChild(voiceBtn);
+chatContainer.appendChild(inputRow);
+// --- VOICE BUTTON END ---
+
 document.body.appendChild(chatContainer);
 
 // --- CONTROL UI START ---
 const controlContainer = document.createElement('div');
 controlContainer.style.position = 'absolute';
-controlContainer.style.top = '20px';
+controlContainer.style.top = '60px'; // Moved down to make room for toggle
 controlContainer.style.right = '20px';
-controlContainer.style.display = 'flex';
+controlContainer.style.display = 'none'; // Default hidden as requested? "Hidden right button, button to open"
 controlContainer.style.flexDirection = 'column';
 controlContainer.style.gap = '5px';
 
@@ -107,12 +171,37 @@ buttons.forEach(btn => {
     button.addEventListener('mouseenter', () => {
         if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
     });
-    // We don't strictly need mouseleave here as moving off the button (and off model) will trigger other checks,
-    // or the window level pass-through will handle it if we are consistent.
 
     controlContainer.appendChild(button);
 });
 document.body.appendChild(controlContainer);
+
+// --- TOGGLE BUTTON START ---
+const toggleBtn = document.createElement('button');
+toggleBtn.innerText = '⚙️'; // Gear or Menu icon
+toggleBtn.style.position = 'absolute';
+toggleBtn.style.top = '20px';
+toggleBtn.style.right = '20px';
+toggleBtn.style.width = '30px';
+toggleBtn.style.height = '30px';
+toggleBtn.style.borderRadius = '50%';
+toggleBtn.style.border = 'none';
+toggleBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+toggleBtn.style.cursor = 'pointer';
+toggleBtn.style.zIndex = '1000';
+
+toggleBtn.addEventListener('mouseenter', () => {
+    if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+});
+
+toggleBtn.addEventListener('click', () => {
+    const isHidden = controlContainer.style.display === 'none';
+    controlContainer.style.display = isHidden ? 'flex' : 'none';
+});
+
+document.body.appendChild(toggleBtn);
+// --- TOGGLE BUTTON END ---
+
 // --- CONTROL UI END ---
 
 // --- TTS LOGIC START ---
@@ -221,21 +310,9 @@ loader.load(
         });
         // ----------------------------------
 
-        // --- ANIMATION STATE ---
+        // --- ANIMATION CONTROLLER ---
+        const controller = new AnimationController(vrm);
         const clock = new THREE.Clock();
-
-        // Blink State
-        let blinkTimer = 0;
-        let blinkInterval = 4.0; // Seconds between blinks
-        let isBlinking = false;
-        let blinkClosing = true;
-
-        // Lip Sync State
-        let isTalking = false;
-
-        // Animation Action State
-        let currentAction = 'IDLE'; // 'IDLE', 'GREET'
-        let actionTimer = 0;
 
         function animate() {
             requestAnimationFrame(animate);
@@ -245,81 +322,8 @@ loader.load(
             // 1. Update VRM (SpringBone, etc.)
             vrm.update(deltaTime);
 
-            // 2. ANIMATION ACTIONS
-            if (currentAction === 'GREET') {
-                // Wave Right Arm
-                // Basic wave: Rotate arm up and wave forearm
-                const wave = Math.sin(elapsedTime * 15.0);
-                const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-                const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-
-                if (rArm) rArm.rotation.z = Math.PI * 0.85; // Raise arm
-                if (rForeArm) rForeArm.rotation.z = Math.PI * 0.1 + wave * 0.2; // Wave forearm
-
-                // Auto-return to idle after 2.5 seconds
-                actionTimer += deltaTime;
-                if (actionTimer > 2.5) {
-                    currentAction = 'IDLE';
-                    // Reset rotations will happen in IDLE frame or naturally blend if we had blending
-                    if (rArm) rArm.rotation.z = 0;
-                    if (rForeArm) rForeArm.rotation.z = 0;
-                }
-            } else {
-                // IDLE: Breathing
-                const s = Math.sin(elapsedTime * 1.0) * 0.05;
-                const spine = vrm.humanoid.getNormalizedBoneNode('spine');
-                const chest = vrm.humanoid.getNormalizedBoneNode('chest');
-                if (spine) spine.rotation.x = s;
-                if (chest) chest.rotation.x = s;
-
-                // Arms down (Relaxed)
-                const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-                const lArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
-                const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-                const lForeArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
-
-                if (rArm) rArm.rotation.z = -1.2;
-                if (lArm) lArm.rotation.z = 1.2;
-                if (rForeArm) rForeArm.rotation.z = 0;
-                if (lForeArm) lForeArm.rotation.z = 0;
-            }
-
-            // 3. BLINKING (Procedural)
-            if (isBlinking) {
-                // simple linear blink
-                const blinkSpeed = 10.0 * deltaTime;
-                if (blinkClosing) {
-                    vrm.expressionManager.setValue('blink', Math.min(1.0, vrm.expressionManager.getValue('blink') + blinkSpeed));
-                    if (vrm.expressionManager.getValue('blink') >= 1.0) blinkClosing = false;
-                } else {
-                    vrm.expressionManager.setValue('blink', Math.max(0.0, vrm.expressionManager.getValue('blink') - blinkSpeed));
-                    if (vrm.expressionManager.getValue('blink') <= 0.0) {
-                        isBlinking = false;
-                        blinkTimer = 0;
-                        blinkInterval = 2.0 + Math.random() * 4.0; // Random next blink
-                    }
-                }
-            } else {
-                blinkTimer += deltaTime;
-                if (blinkTimer >= blinkInterval) {
-                    isBlinking = true;
-                    blinkClosing = true;
-                }
-            }
-
-            // 4. LIP SYNC (Pseudo)
-            if (isTalking) {
-                // Talk loop: open/close mouth rapidly
-                const talkValue = (Math.sin(elapsedTime * 20.0) + 1.0) * 0.5; // 0 to 1
-                vrm.expressionManager.setValue('aa', talkValue);
-                // vrm.expressionManager.setValue('ih', talkValue * 0.3);
-            } else {
-                // Smoothly close mouth
-                const currentAa = vrm.expressionManager.getValue('aa');
-                if (currentAa > 0) {
-                    vrm.expressionManager.setValue('aa', Math.max(0, currentAa - deltaTime * 5.0));
-                }
-            }
+            // 2. Update Animation Controller (Body Actions + Face)
+            controller.update(deltaTime);
 
             // --- GHOST MODE: Check Intersection ---
             // Optimization: Only raycast every RAYCAST_INTERVAL seconds
@@ -355,8 +359,7 @@ loader.load(
             window.setTalkingState(true);
         });
         document.getElementById('btn-greet').addEventListener('click', () => {
-            currentAction = 'GREET';
-            actionTimer = 0;
+            controller.setAction('GREET');
         });
         document.getElementById('btn-happy').addEventListener('click', () => {
             window.setEmotion('JOY');
@@ -365,13 +368,8 @@ loader.load(
             window.setEmotion('ANGRY');
         });
         document.getElementById('btn-idle').addEventListener('click', () => {
-            currentAction = 'IDLE';
+            controller.setAction('IDLE');
             window.setEmotion('NEUTRAL');
-            // Hard reset arms
-            const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-            const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-            if (rArm) rArm.rotation.set(0, 0, 0);
-            if (rForeArm) rForeArm.rotation.set(0, 0, 0);
         });
         document.getElementById('btn-hands').addEventListener('click', () => {
              // Simulate a request to use automation
@@ -382,11 +380,9 @@ loader.load(
         // ------------------------
 
         // Helpers to hook into TTS
-        // We override the global speakText to toggle isTalking
-        // BUT speakText is defined outside this scope. 
-        // We need to expose a setter or event logic.
-        // A simple hack: Attach to window or use CustomEvent.
-        window.setTalkingState = (state) => { isTalking = state; };
+        window.setTalkingState = (state) => {
+            controller.setTalking(state);
+        };
 
         // --- EMOTION -> EXPRESSION MAPPING ---
         const emotionToExpression = {
@@ -400,11 +396,22 @@ loader.load(
 
         window.setEmotion = (emotion) => {
             const exprName = emotionToExpression[emotion] || 'neutral';
+
+            // 1. Set Facial Expression
             if (currentExpression && currentExpression !== exprName) {
                 vrm.expressionManager.setValue(currentExpression, 0);
             }
             vrm.expressionManager.setValue(exprName, 1.0);
             currentExpression = exprName;
+
+            // 2. Set Body Action (Simple Mapping)
+            if (emotion === 'JOY' || emotion === 'FUN') {
+                controller.setAction('HAPPY');
+            } else if (emotion === 'ANGRY') {
+                controller.setAction('ANGRY');
+            } else if (emotion === 'NEUTRAL') {
+                controller.setAction('IDLE');
+            }
         };
 
         if (window.electronAPI) {
@@ -470,3 +477,74 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// --- RESOLUTION UI START ---
+const resModal = document.createElement('div');
+resModal.style.position = 'absolute';
+resModal.style.top = '50%';
+resModal.style.left = '50%';
+resModal.style.transform = 'translate(-50%, -50%)';
+resModal.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+resModal.style.padding = '20px';
+resModal.style.borderRadius = '10px';
+resModal.style.display = 'none'; // Hidden by default
+resModal.style.flexDirection = 'column';
+resModal.style.gap = '10px';
+resModal.style.color = 'white';
+resModal.style.zIndex = '2000';
+
+const resTitle = document.createElement('h3');
+resTitle.innerText = 'Select Resolution';
+resModal.appendChild(resTitle);
+
+const resolutions = [
+    { w: 1920, h: 1080, label: '1920 x 1080' },
+    { w: 1440, h: 900, label: '1440 x 900' },
+    { w: 1280, h: 720, label: '1280 x 720' },
+    { w: 1024, h: 768, label: '1024 x 768' }
+];
+
+resolutions.forEach(res => {
+    const btn = document.createElement('button');
+    btn.innerText = res.label;
+    btn.style.padding = '8px';
+    btn.style.cursor = 'pointer';
+    btn.onclick = () => {
+        if (window.electronAPI) {
+            window.electronAPI.setResolution(res.w, res.h);
+            resModal.style.display = 'none';
+        }
+    };
+    // Mouse ignore
+    btn.addEventListener('mouseenter', () => {
+        if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+    });
+    resModal.appendChild(btn);
+});
+
+// Close button
+const closeBtn = document.createElement('button');
+closeBtn.innerText = 'Cancel';
+closeBtn.style.padding = '8px';
+closeBtn.style.marginTop = '10px';
+closeBtn.onclick = () => {
+    resModal.style.display = 'none';
+};
+closeBtn.addEventListener('mouseenter', () => {
+    if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+});
+resModal.appendChild(closeBtn);
+
+document.body.appendChild(resModal);
+
+// Listener
+if (window.electronAPI) {
+    window.electronAPI.onAction((action) => {
+        if (action.tool === 'open_resolution_settings') {
+            resModal.style.display = 'flex';
+            // Ensure mouse can click it
+             window.electronAPI.setIgnoreMouseEvents(false);
+        }
+    });
+}
+// --- RESOLUTION UI END ---
