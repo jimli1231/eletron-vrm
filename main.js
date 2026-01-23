@@ -31,22 +31,15 @@ const createWindow = () => {
         win.setIgnoreMouseEvents(ignore, { forward: true })
     })
 
-    // IPC for Drag Window
-    ipcMain.on('start-drag', (event) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        // Enable drag behavior on frameless window
-        // Note: Actually moving the window requires mouse tracking. 
-        // A simpler approach: use -webkit-app-region: drag in CSS for a specific element.
-        // But for VRM click, we'll trigger a manual drag simulation here.
-        // Actually, BrowserWindow doesn't have a startDrag method for window position.
-        // We'll use win.setPosition() based on mouse delta in renderer. 
-        // For now, let's expose a 'move-window' IPC.
-    })
-
     ipcMain.on('move-window', (event, deltaX, deltaY) => {
         const win = BrowserWindow.fromWebContents(event.sender)
         const [x, y] = win.getPosition()
         win.setPosition(x + deltaX, y + deltaY)
+    })
+
+    // IPC for Resolution Control
+    ipcMain.on('set-resolution', (event, w, h) => {
+        automation.setResolution(w, h)
     })
 
     // IPC for Chat
@@ -67,6 +60,10 @@ const createWindow = () => {
 
     llm.on('action', async (action) => {
         console.log('LLM Action:', action)
+        // Forward all actions to renderer (useful for UI triggers)
+        win.webContents.send('llm:action', action)
+
+        // Execute backend automation
         if (action.tool === 'adjust_brightness') {
             await automation.adjustBrightness(action.args.direction)
         } else if (action.tool === 'type_text') {
@@ -74,6 +71,7 @@ const createWindow = () => {
         } else if (action.tool === 'click_image') {
             await automation.clickImage(action.args.template)
         }
+        // open_resolution_settings is handled by Renderer via the forwarded event
     })
 
     // Auto-test

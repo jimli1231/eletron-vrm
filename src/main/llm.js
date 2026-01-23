@@ -23,12 +23,16 @@ class LLMService extends EventEmitter {
             The JSON object must have the following fields:
             - "speech": (string) The text you want to say to the user. Keep it natural and spoken.
             - "emotion": (string) One of ["NEUTRAL", "JOY", "ANGRY", "SORROW", "FUN"].
+              * Use "JOY" or "FUN" when greeting or happy to trigger happy animations.
+              * Use "ANGRY" when annoyed.
+              * Use "NEUTRAL" for idle.
             - "action": (object, optional) { "tool": "string", "args": object }.
 
             Available Tools:
-            - "adjust_brightness": args: { "direction": "up" | "down" } (Controls macOS brightness)
+            - "adjust_brightness": args: { "direction": "up" | "down" } (Controls macOS/system brightness)
             - "type_text": args: { "text": "string" } (Types text using keyboard)
             - "click_image": args: { "template": "filename.png" } (Finds and clicks an image on screen)
+            - "open_resolution_settings": args: {} (Opens a UI to change screen resolution)
 
             Example:
             { "speech": "Okay, adjusting brightness!", "emotion": "JOY", "action": { "tool": "adjust_brightness", "args": { "direction": "up" } } }
