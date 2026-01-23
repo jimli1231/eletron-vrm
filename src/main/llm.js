@@ -48,6 +48,11 @@ class LLMService extends EventEmitter {
             });
 
             this.rawBuffer = '';
+            this.accumulatedResponse = '';
+            this.emittedSpeechLen = 0;
+            this.emittedEmotion = null;
+            this.speechValueStartIndex = -1;
+            this.emotionValueStartIndex = -1;
 
             response.data.on('data', (chunk) => {
                 const textChunk = chunk.toString();
@@ -89,6 +94,8 @@ class LLMService extends EventEmitter {
     // Buffer for the *content* of the response
     accumulatedResponse = '';
     emittedSpeechLen = 0;
+    speechValueStartIndex = -1;
+    emotionValueStartIndex = -1;
 
     processRawBuffer() {
         // Regex to hunt for "text": "..." content
@@ -119,22 +126,47 @@ class LLMService extends EventEmitter {
     }
 
     parseAccumulatedSpeech() {
-        // Scan for speech in accumulatedResponse
-        const speechMatch = this.accumulatedResponse.match(/"speech":\s*"((?:[^"\\]|\\.)*)/);
-        if (speechMatch) {
-            const currentTotalSpeech = speechMatch[1];
-            if (currentTotalSpeech.length > this.emittedSpeechLen) {
-                const newPart = currentTotalSpeech.slice(this.emittedSpeechLen);
-                this.emit('speech-delta', newPart);
-                this.emittedSpeechLen = currentTotalSpeech.length;
+        // Optimize: Find start index of speech value once
+        if (this.speechValueStartIndex === -1) {
+            const speechPreamble = /"speech":\s*"/g;
+            const match = speechPreamble.exec(this.accumulatedResponse);
+            if (match) {
+                this.speechValueStartIndex = speechPreamble.lastIndex;
             }
         }
 
-        // Scan for emotion
-        const emotionMatch = this.accumulatedResponse.match(/"emotion":\s*"([^"]+)"/);
-        if (emotionMatch && emotionMatch[1] !== this.emittedEmotion) {
-            this.emittedEmotion = emotionMatch[1];
-            this.emit('emotion', this.emittedEmotion);
+        if (this.speechValueStartIndex !== -1) {
+            // Use sticky regex to match content from the known position
+            const contentRegex = /((?:[^"\\]|\\.)*)/y;
+            contentRegex.lastIndex = this.speechValueStartIndex + this.emittedSpeechLen;
+            const match = contentRegex.exec(this.accumulatedResponse);
+
+            if (match) {
+                const newPart = match[1];
+                if (newPart.length > 0) {
+                    this.emit('speech-delta', newPart);
+                    this.emittedSpeechLen += newPart.length;
+                }
+            }
+        }
+
+        // Optimize: Find start index of emotion value once
+        if (this.emotionValueStartIndex === -1) {
+            const emotionPreamble = /"emotion":\s*"/g;
+            const match = emotionPreamble.exec(this.accumulatedResponse);
+            if (match) {
+                this.emotionValueStartIndex = emotionPreamble.lastIndex;
+            }
+        }
+
+        if (this.emotionValueStartIndex !== -1) {
+            const emotionRegex = /([^"]+)/y;
+            emotionRegex.lastIndex = this.emotionValueStartIndex;
+            const match = emotionRegex.exec(this.accumulatedResponse);
+            if (match && match[1] !== this.emittedEmotion) {
+                this.emittedEmotion = match[1];
+                this.emit('emotion', this.emittedEmotion);
+            }
         }
     }
 
