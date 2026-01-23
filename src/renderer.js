@@ -165,6 +165,10 @@ loader.load(
         pointer.y = 1000;
         let isHovering = false;
 
+        // Optimization: Throttle raycasting
+        let lastRaycastTime = 0;
+        const RAYCAST_INTERVAL = 0.1; // Check every 100ms
+
         window.addEventListener('mousemove', (event) => {
             pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
             pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -235,16 +239,21 @@ loader.load(
             }
 
             // --- GHOST MODE: Check Intersection ---
-            raycaster.setFromCamera(pointer, camera);
-            const intersects = raycaster.intersectObjects(vrm.scene.children, true);
-            const currentlyHovering = intersects.length > 0;
+            // Optimization: Only raycast every RAYCAST_INTERVAL seconds
+            if (elapsedTime - lastRaycastTime > RAYCAST_INTERVAL) {
+                lastRaycastTime = elapsedTime;
 
-            if (currentlyHovering !== isHovering) {
-                isHovering = currentlyHovering;
-                // Hovering = Interactive (ignoreMouse = false)
-                // Not Hovering = Passthrough (ignoreMouse = true)
-                if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
-                    window.electronAPI.setIgnoreMouseEvents(!isHovering);
+                raycaster.setFromCamera(pointer, camera);
+                const intersects = raycaster.intersectObjects(vrm.scene.children, true);
+                const currentlyHovering = intersects.length > 0;
+
+                if (currentlyHovering !== isHovering) {
+                    isHovering = currentlyHovering;
+                    // Hovering = Interactive (ignoreMouse = false)
+                    // Not Hovering = Passthrough (ignoreMouse = true)
+                    if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                        window.electronAPI.setIgnoreMouseEvents(!isHovering);
+                    }
                 }
             }
             // --------------------------------------
