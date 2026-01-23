@@ -7,7 +7,7 @@ const scene = new THREE.Scene();
 // scene.background = new THREE.Color(0x333333); // Remove background color for transparency
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-camera.position.set(0.0, 1.0, 5.0);
+camera.position.set(0.0, 1.0, 3.0); // 相机更近
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setClearColor(0x000000, 0); // Transparent clear color
@@ -66,12 +66,54 @@ inputBox.addEventListener('keypress', (e) => {
             window.electronAPI.sendChat(text);
             inputBox.value = '';
             outputBox.innerText = ''; // Clear prev output
+            outputBox.style.color = 'white';
         }
     }
 });
 
 chatContainer.appendChild(inputBox);
 document.body.appendChild(chatContainer);
+
+// --- CONTROL UI START ---
+const controlContainer = document.createElement('div');
+controlContainer.style.position = 'absolute';
+controlContainer.style.top = '20px';
+controlContainer.style.right = '20px';
+controlContainer.style.display = 'flex';
+controlContainer.style.flexDirection = 'column';
+controlContainer.style.gap = '5px';
+
+const buttons = [
+    { label: '对话', id: 'btn-talk' },
+    { label: '模型对话', id: 'btn-model-talk' },
+    { label: '打招呼', id: 'btn-greet' },
+    { label: '开心', id: 'btn-happy' },
+    { label: '生气', id: 'btn-angry' },
+    { label: 'Idle', id: 'btn-idle' },
+    { label: '双手', id: 'btn-hands' }
+];
+
+buttons.forEach(btn => {
+    const button = document.createElement('button');
+    button.innerText = btn.label;
+    button.id = btn.id;
+    button.style.padding = '5px 10px';
+    button.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+    button.style.border = 'none';
+    button.style.borderRadius = '3px';
+    button.style.cursor = 'pointer';
+
+    // Ensure clicks work by disabling mouse ignore on hover
+    button.addEventListener('mouseenter', () => {
+        if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
+    });
+    // We don't strictly need mouseleave here as moving off the button (and off model) will trigger other checks,
+    // or the window level pass-through will handle it if we are consistent.
+
+    controlContainer.appendChild(button);
+});
+document.body.appendChild(controlContainer);
+// --- CONTROL UI END ---
 
 // --- TTS LOGIC START ---
 const synth = window.speechSynthesis;
@@ -122,6 +164,13 @@ if (window.electronAPI) {
             }
         }
     });
+
+    window.electronAPI.onLLMError((err) => {
+        outputBox.innerText = `Error: ${err}`;
+        outputBox.style.color = 'red';
+        // Reset color after a while or leave it? Leave it for visibility.
+        // But we should reset it on next chat.
+    });
 }
 // --- TTS LOGIC END ---
 // --- CHAT UI END ---
@@ -154,9 +203,6 @@ loader.load(
         scene.add(vrm.scene);
         console.log('VRM Loaded!');
 
-        // Look straight ahead
-        vrm.humanoid.getNormalizedBoneNode('neck').rotation.y = Math.PI;
-
         // --- GHOST MODE: Raycaster Init ---
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
@@ -187,6 +233,10 @@ loader.load(
         // Lip Sync State
         let isTalking = false;
 
+        // Animation Action State
+        let currentAction = 'IDLE'; // 'IDLE', 'GREET'
+        let actionTimer = 0;
+
         function animate() {
             requestAnimationFrame(animate);
             const deltaTime = clock.getDelta();
@@ -195,11 +245,44 @@ loader.load(
             // 1. Update VRM (SpringBone, etc.)
             vrm.update(deltaTime);
 
-            // 2. BREATHING (Sine wave on chest/spine)
-            // A subtle sine wave on curvature
-            const s = Math.sin(elapsedTime * 1.0) * 0.05;
-            vrm.humanoid.getNormalizedBoneNode('spine').rotation.x = s;
-            vrm.humanoid.getNormalizedBoneNode('chest').rotation.x = s;
+            // 2. ANIMATION ACTIONS
+            if (currentAction === 'GREET') {
+                // Wave Right Arm
+                // Basic wave: Rotate arm up and wave forearm
+                const wave = Math.sin(elapsedTime * 15.0);
+                const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+
+                if (rArm) rArm.rotation.z = Math.PI * 0.85; // Raise arm
+                if (rForeArm) rForeArm.rotation.z = Math.PI * 0.1 + wave * 0.2; // Wave forearm
+
+                // Auto-return to idle after 2.5 seconds
+                actionTimer += deltaTime;
+                if (actionTimer > 2.5) {
+                    currentAction = 'IDLE';
+                    // Reset rotations will happen in IDLE frame or naturally blend if we had blending
+                    if (rArm) rArm.rotation.z = 0;
+                    if (rForeArm) rForeArm.rotation.z = 0;
+                }
+            } else {
+                // IDLE: Breathing
+                const s = Math.sin(elapsedTime * 1.0) * 0.05;
+                const spine = vrm.humanoid.getNormalizedBoneNode('spine');
+                const chest = vrm.humanoid.getNormalizedBoneNode('chest');
+                if (spine) spine.rotation.x = s;
+                if (chest) chest.rotation.x = s;
+
+                // Arms down (Relaxed)
+                const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                const lArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+                const lForeArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+
+                if (rArm) rArm.rotation.z = -1.2;
+                if (lArm) lArm.rotation.z = 1.2;
+                if (rForeArm) rForeArm.rotation.z = 0;
+                if (lForeArm) lForeArm.rotation.z = 0;
+            }
 
             // 3. BLINKING (Procedural)
             if (isBlinking) {
@@ -262,6 +345,42 @@ loader.load(
         }
         animate();
 
+        // --- BUTTON LISTENERS ---
+        document.getElementById('btn-talk').addEventListener('click', () => {
+            inputBox.focus();
+        });
+        document.getElementById('btn-model-talk').addEventListener('click', () => {
+            // Mock response
+            speakText("你好，很高兴见到你。");
+            window.setTalkingState(true);
+        });
+        document.getElementById('btn-greet').addEventListener('click', () => {
+            currentAction = 'GREET';
+            actionTimer = 0;
+        });
+        document.getElementById('btn-happy').addEventListener('click', () => {
+            window.setEmotion('JOY');
+        });
+        document.getElementById('btn-angry').addEventListener('click', () => {
+            window.setEmotion('ANGRY');
+        });
+        document.getElementById('btn-idle').addEventListener('click', () => {
+            currentAction = 'IDLE';
+            window.setEmotion('NEUTRAL');
+            // Hard reset arms
+            const rArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            const rForeArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+            if (rArm) rArm.rotation.set(0, 0, 0);
+            if (rForeArm) rForeArm.rotation.set(0, 0, 0);
+        });
+        document.getElementById('btn-hands').addEventListener('click', () => {
+             // Simulate a request to use automation
+             if (window.electronAPI) {
+                 window.electronAPI.sendChat("Adjust the brightness up, please.");
+             }
+        });
+        // ------------------------
+
         // Helpers to hook into TTS
         // We override the global speakText to toggle isTalking
         // BUT speakText is defined outside this scope. 
@@ -297,22 +416,38 @@ loader.load(
 
         // --- DRAG LOGIC ---
         let isDragging = false;
+        let isWindowDragging = false; // Alt+拖动移动窗口
         let lastMouseX = 0;
         let lastMouseY = 0;
+        let modelRotationY = Math.PI; // 初始旋转角度（模型面向摄像机）
 
         renderer.domElement.addEventListener('mousedown', (e) => {
             // Only start drag if hovering model
             if (isHovering) {
-                isDragging = true;
+                if (e.altKey) {
+                    // Alt+左键 = 移动窗口
+                    isWindowDragging = true;
+                } else {
+                    // 普通左键 = 旋转模型
+                    isDragging = true;
+                }
                 lastMouseX = e.screenX;
                 lastMouseY = e.screenY;
             }
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (isDragging && window.electronAPI) {
-                const dx = e.screenX - lastMouseX;
-                const dy = e.screenY - lastMouseY;
+            const dx = e.screenX - lastMouseX;
+            const dy = e.screenY - lastMouseY;
+
+            if (isDragging) {
+                // 旋转模型（水平拖动控制 Y 轴旋转）
+                modelRotationY += dx * 0.01;
+                vrm.scene.rotation.y = modelRotationY;
+                lastMouseX = e.screenX;
+                lastMouseY = e.screenY;
+            } else if (isWindowDragging && window.electronAPI) {
+                // 移动窗口
                 window.electronAPI.moveWindow(dx, dy);
                 lastMouseX = e.screenX;
                 lastMouseY = e.screenY;
@@ -321,6 +456,7 @@ loader.load(
 
         window.addEventListener('mouseup', () => {
             isDragging = false;
+            isWindowDragging = false;
         });
         // ------------------
     },

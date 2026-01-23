@@ -25,8 +25,13 @@ class LLMService extends EventEmitter {
             - "emotion": (string) One of ["NEUTRAL", "JOY", "ANGRY", "SORROW", "FUN"].
             - "action": (object, optional) { "tool": "string", "args": object }.
 
+            Available Tools:
+            - "adjust_brightness": args: { "direction": "up" | "down" } (Controls macOS brightness)
+            - "type_text": args: { "text": "string" } (Types text using keyboard)
+            - "click_image": args: { "template": "filename.png" } (Finds and clicks an image on screen)
+
             Example:
-            { "speech": "Hello! It's great to see you!", "emotion": "JOY" }
+            { "speech": "Okay, adjusting brightness!", "emotion": "JOY", "action": { "tool": "adjust_brightness", "args": { "direction": "up" } } }
         `;
 
         const payload = {
@@ -61,6 +66,17 @@ class LLMService extends EventEmitter {
             });
 
             response.data.on('end', () => {
+                try {
+                    // Attempt to parse the full JSON to get the action
+                    // Clean up potential markdown code blocks if Gemini adds them
+                    const cleanJson = this.accumulatedResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJson);
+                    if (parsed.action) {
+                        this.emit('action', parsed.action);
+                    }
+                } catch (e) {
+                    console.error('Error parsing final JSON for action:', e);
+                }
                 this.emit('end');
                 this.rawBuffer = '';
             });
