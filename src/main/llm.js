@@ -7,12 +7,32 @@ class LLMService extends EventEmitter {
         this.apiKey = apiKey;
         this.model = 'gemini-2.0-flash-exp'; // Updated to 2.0 Flash as requested
         this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+        this.history = [];
+    }
+
+    clearHistory() {
+        this.history = [];
     }
 
     async chat(userMessage) {
         if (!this.apiKey) {
             this.emit('error', 'Missing API Key');
             return;
+        }
+
+        // Add user message to history
+        this.history.push({
+            role: 'user',
+            parts: [{ text: userMessage }]
+        });
+
+        // Limit history to last 10 messages (5 turns)
+        while (this.history.length > 10) {
+            this.history.shift();
+        }
+        // Ensure history starts with user message (Gemini requirement)
+        if (this.history.length > 0 && this.history[0].role === 'model') {
+            this.history.shift();
         }
 
         const url = `${this.baseUrl}/${this.model}:streamGenerateContent?key=${this.apiKey}`;
@@ -35,10 +55,7 @@ class LLMService extends EventEmitter {
         `;
 
         const payload = {
-            contents: [{
-                role: 'user',
-                parts: [{ text: userMessage }]
-            }],
+            contents: this.history,
             systemInstruction: {
                 parts: [{ text: systemInstruction }]
             },
@@ -71,6 +88,19 @@ class LLMService extends EventEmitter {
                     // Clean up potential markdown code blocks if Gemini adds them
                     const cleanJson = this.accumulatedResponse.replace(/```json/g, '').replace(/```/g, '').trim();
                     const parsed = JSON.parse(cleanJson);
+
+                    if (parsed.speech) {
+                        this.history.push({
+                            role: 'model',
+                            parts: [{ text: parsed.speech }]
+                        });
+
+                        // Limit history again
+                        if (this.history.length > 10) {
+                            this.history = this.history.slice(this.history.length - 10);
+                        }
+                    }
+
                     if (parsed.action) {
                         this.emit('action', parsed.action);
                     }

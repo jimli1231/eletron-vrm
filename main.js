@@ -55,6 +55,11 @@ const createWindow = () => {
         llm.chat(message)
     })
 
+    ipcMain.on('chat:clear-history', () => {
+        console.log('Clearing conversation history')
+        llm.clearHistory()
+    })
+
     // LLM Events -> Renderer
     llm.on('speech-delta', (delta) => {
         process.stdout.write(delta); // Print to terminal so we can see it
