@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+import { VRMAnimationLoaderPlugin } from '@pixiv/three-vrm-animation';
 import { AnimationController } from './AnimationController.js';
 
 // Scene setup
@@ -273,6 +274,9 @@ scene.add(light);
 const loader = new GLTFLoader();
 loader.register((parser) => {
     return new VRMLoaderPlugin(parser);
+});
+loader.register((parser) => {
+    return new VRMAnimationLoaderPlugin(parser);
 });
 
 // Load local asset

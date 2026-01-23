@@ -479,6 +479,15 @@
     jimp "0.22.10"
     node-abort-controller "3.1.1"
 
+"@pixiv/three-vrm-animation@^3.4.5":
+  version "3.4.5"
+  resolved "https://registry.npmmirror.com/@pixiv/three-vrm-animation/-/three-vrm-animation-3.4.5.tgz#46e2e2b27909b12f806b9233fa03f586b406ad19"
+  integrity sha512-lG13OHGQ698Nby7SBGiPLcQLvReV/omZkJooR/0upB5qK6Idu8smZeQczmo+zweRPrc/QWbNHDo9vO5rU52gig==
+  dependencies:
+    "@pixiv/three-vrm-core" "3.4.5"
+    "@pixiv/types-vrmc-vrm-1.0" "3.4.5"
+    "@pixiv/types-vrmc-vrm-animation-1.0" "3.4.5"
+
 "@pixiv/three-vrm-core@3.4.5":
   version "3.4.5"
   resolved "https://registry.npmmirror.com/@pixiv/three-vrm-core/-/three-vrm-core-3.4.5.tgz"
@@ -568,10 +577,22 @@
   resolved "https://registry.npmmirror.com/@pixiv/types-vrmc-springbone-extended-collider-1.0/-/types-vrmc-springbone-extended-collider-1.0-3.4.5.tgz"
   integrity sha512-e/dTjBwHCDpUE//FmSMkcDrXKl9iY8Tr3QNxQrWZDHKNvPoGvNvjsFsSjtVBniZe9FsVI7gou1qIZbdULE1jIg==
 
+"@pixiv/types-vrmc-vrm-1.0@2.0.3":
+  version "2.0.3"
+  resolved "https://registry.npmmirror.com/@pixiv/types-vrmc-vrm-1.0/-/types-vrmc-vrm-1.0-2.0.3.tgz#6f3674b955d54c0c5489bc57e0e19552d0c613e1"
+  integrity sha512-RMP34Bk1qLFQv/CRB1Zqvn2qMFfWQfP2Hms5QrrfoBsW9XroZdEe0zPLNbGmUPYh4F7VtBb+B7+RCuymRtpehA==
+
 "@pixiv/types-vrmc-vrm-1.0@3.4.5":
   version "3.4.5"
   resolved "https://registry.npmmirror.com/@pixiv/types-vrmc-vrm-1.0/-/types-vrmc-vrm-1.0-3.4.5.tgz"
   integrity sha512-6OIA1IinZ7h8DdxW8aToWowfHgr8qJ31cx2so7Tdj65eOIi59ohvskbWy3SFDG9Zt2tvN/M7Rr9W2rkb8LMFUA==
+
+"@pixiv/types-vrmc-vrm-animation-1.0@3.4.5":
+  version "3.4.5"
+  resolved "https://registry.npmmirror.com/@pixiv/types-vrmc-vrm-animation-1.0/-/types-vrmc-vrm-animation-1.0-3.4.5.tgz#20b2cdaf73d7ea82c2d7ec71ea55a7590ca33436"
+  integrity sha512-pUyhddl1DAb+jhCHLvbVIMeKUCfR5nzRV30qJ7Pvu2o6MToPlI6KvDnYVgFDx0k7g3rJKmTm6vbPpqMP6OgRxQ==
+  dependencies:
+    "@pixiv/types-vrmc-vrm-1.0" "2.0.3"
 
 "@sideway/address@^4.1.5":
   version "4.1.5"

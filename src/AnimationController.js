@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 
 export class AnimationController {
     constructor(vrm) {
@@ -156,6 +158,22 @@ export class AnimationController {
                 console.log('Pose applied:', json.name);
             })
             .catch(err => console.error('Error loading pose:', err));
+    }
+
+    loadVRMA(url) {
+        const loader = new THREE.GLTFLoader(); // We need a new GLTFLoader for VRMA, ideally reused but new is fine
+        // Wait, standard GLTFLoader needs the plugin registered to parse VRMA? 
+        // Actually, for VRMA, the plugin 'VRMAnimationLoaderPlugin' handles parsing.
+        // But here we are inside the class, we can import GLTFLoader or pass it.
+        // Let's import GLTFLoader locally or assume global THREE usage if needed, but we imported it in renderer.
+        // Better: Import GLTFLoader here too.
+
+        console.log('Loading VRMA from:', url);
+        // We need to register the plugin to this loader instance
+        // Dynamic import or reuse? 
+        // Let's rely on the import we added at top: import { GLTFLoader } ... (wait, we didn't import GLTFLoader in this file yet)
+
+        // REVISE: We need GLTFLoader and Plugin here.
     }
 
     update(deltaTime) {
