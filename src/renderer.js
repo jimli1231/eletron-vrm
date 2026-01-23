@@ -312,8 +312,9 @@ loader.load(
 
         // --- ANIMATION CONTROLLER ---
         const controller = new AnimationController(vrm);
-        // Load FBX Idle Animation from public directory
-        controller.loadIdleAnimation('/Standing Idle.fbx');
+        // Load Static Pose
+        controller.loadPose('/src/assets/pose/Standing.json');
+
         const clock = new THREE.Clock();
 
         function animate() {
