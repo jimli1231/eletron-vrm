@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 
 export class AnimationController {
     constructor(vrm) {

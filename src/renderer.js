@@ -313,7 +313,7 @@ loader.load(
         // --- ANIMATION CONTROLLER ---
         const controller = new AnimationController(vrm);
         // Load FBX Idle Animation from public directory
-        controller.loadIdleAnimation('/Standing Idle.fbx');
+        controller.loadIdleAnimation('/StandingIdle.fbx');
         const clock = new THREE.Clock();
 
         function animate() {
