@@ -312,6 +312,8 @@ loader.load(
 
         // --- ANIMATION CONTROLLER ---
         const controller = new AnimationController(vrm);
+        // Load FBX Idle Animation from public directory
+        controller.loadIdleAnimation('/Standing Idle.fbx');
         const clock = new THREE.Clock();
 
         function animate() {
@@ -372,10 +374,10 @@ loader.load(
             window.setEmotion('NEUTRAL');
         });
         document.getElementById('btn-hands').addEventListener('click', () => {
-             // Simulate a request to use automation
-             if (window.electronAPI) {
-                 window.electronAPI.sendChat("Adjust the brightness up, please.");
-             }
+            // Simulate a request to use automation
+            if (window.electronAPI) {
+                window.electronAPI.sendChat("Adjust the brightness up, please.");
+            }
         });
         // ------------------------
 
@@ -543,7 +545,7 @@ if (window.electronAPI) {
         if (action.tool === 'open_resolution_settings') {
             resModal.style.display = 'flex';
             // Ensure mouse can click it
-             window.electronAPI.setIgnoreMouseEvents(false);
+            window.electronAPI.setIgnoreMouseEvents(false);
         }
     });
 }

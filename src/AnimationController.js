@@ -1,10 +1,15 @@
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 export class AnimationController {
     constructor(vrm) {
         this.vrm = vrm;
         this.currentAction = 'IDLE'; // IDLE, GREET, HAPPY, ANGRY
         this.actionTimer = 0;
+
+        // Animation Mixer for FBX
+        this.mixer = new THREE.AnimationMixer(this.vrm.scene);
+        this.idleAction = null;
 
         // Blink State
         this.blinkTimer = 0;
@@ -16,8 +21,112 @@ export class AnimationController {
         this.isTalking = false;
     }
 
+    loadIdleAnimation(url) {
+        const loader = new FBXLoader();
+        console.log('Loading FBX from:', url);
+
+        loader.load(
+            url,
+            (asset) => {
+                try {
+                    console.log('FBX loaded, animations:', asset.animations.length);
+                    const clip = asset.animations[0];
+                    if (!clip) {
+                        console.warn('No animation clip found in FBX');
+                        return;
+                    }
+
+                    // Retargeting
+                    const tracks = [];
+                    // Basic Mixamo -> VRM Map
+                    // Note: VRM uses "humanoid" bone names, but the actual Scene Graph nodes might have different names
+                    // HOWEVER, we can access the nodes via vrm.humanoid.getNormalizedBoneNode(vrmBoneName).name
+
+                    const mixamoVRMRigMap = {
+                        mixamorigHips: 'hips',
+                        mixamorigSpine: 'spine',
+                        mixamorigSpine1: 'chest',
+                        mixamorigSpine2: 'upperChest',
+                        mixamorigNeck: 'neck',
+                        mixamorigHead: 'head',
+                        mixamorigLeftShoulder: 'leftShoulder',
+                        mixamorigLeftArm: 'leftUpperArm',
+                        mixamorigLeftForeArm: 'leftLowerArm',
+                        mixamorigLeftHand: 'leftHand',
+                        mixamorigRightShoulder: 'rightShoulder',
+                        mixamorigRightArm: 'rightUpperArm',
+                        mixamorigRightForeArm: 'rightLowerArm',
+                        mixamorigRightHand: 'rightHand',
+                        mixamorigLeftUpLeg: 'leftUpperLeg',
+                        mixamorigLeftLeg: 'leftLowerLeg',
+                        mixamorigLeftFoot: 'leftFoot',
+                        mixamorigLeftToeBase: 'leftToes',
+                        mixamorigRightUpLeg: 'rightUpperLeg',
+                        mixamorigRightLeg: 'rightLowerLeg',
+                        mixamorigRightFoot: 'rightFoot',
+                        mixamorigRightToeBase: 'rightToes',
+                    };
+
+                    console.log('FBX clip tracks:', clip.tracks.length);
+
+                    clip.tracks.forEach((track) => {
+                        // track.name is like "mixamorigHips.position" or "mixamorigHips.quaternion"
+                        const trackSplits = track.name.split('.');
+                        const boneName = trackSplits[0];
+                        const property = trackSplits[1];
+
+                        const vrmBoneName = mixamoVRMRigMap[boneName];
+                        if (vrmBoneName) {
+                            const vrmNode = this.vrm.humanoid.getNormalizedBoneNode(vrmBoneName);
+                            if (vrmNode) {
+                                const newTrackName = `${vrmNode.name}.${property}`;
+
+                                // If it's position, we generally usually only apply it to Hips for root motion.
+                                // Other bones usually just rotate.
+                                // Scaling Mixamo position to VRM scale might be needed if they differ drastically.
+                                // For now, let's include all.
+                                if (property === 'position' && vrmBoneName !== 'hips') return; // Valid optimization: ignore translation for non-root bones
+
+                                // Create new track with mapped name
+                                // We clone the track to avoid mutating original if needed, but here we just create a new one
+                                // Actually, TypedKeyframeTrack clone is easiest
+                                const newTrack = track.clone();
+                                newTrack.name = newTrackName;
+                                tracks.push(newTrack);
+                            }
+                        }
+                    });
+
+                    console.log('Retargeted tracks:', tracks.length);
+
+                    if (tracks.length > 0) {
+                        const newClip = new THREE.AnimationClip('Idle', clip.duration, tracks);
+                        this.idleAction = this.mixer.clipAction(newClip);
+                        this.idleAction.play();
+                        console.log('Idle Animation Loaded & Playing');
+                    } else {
+                        console.warn('No tracks matched VRM bones');
+                    }
+                } catch (e) {
+                    console.error('Error processing FBX animation:', e);
+                }
+            },
+            (progress) => {
+                console.log('FBX loading progress:', (progress.loaded / progress.total * 100).toFixed(1) + '%');
+            },
+            (error) => {
+                console.error('Error loading FBX:', error);
+            }
+        );
+    }
+
     update(deltaTime) {
         this.actionTimer += deltaTime;
+
+        // Update Mixer (FBX Animation)
+        if (this.mixer) {
+            this.mixer.update(deltaTime);
+        }
 
         // 1. Body Animation State Machine
         switch (this.currentAction) {
@@ -52,6 +161,11 @@ export class AnimationController {
 
         this.currentAction = action;
         this.actionTimer = 0;
+
+        // Logic: specific actions might fade out the idle mixer?
+        // For now, Greet, Happy, Angry are procedural overrides.
+        // We leave the mixer running underneath. 
+        // Ideally we'd crossfade if we had FBX for those too.
     }
 
     setTalking(talking) {
@@ -69,13 +183,6 @@ export class AnimationController {
         boneNames.forEach(name => {
             const node = this.vrm.humanoid.getNormalizedBoneNode(name);
             if (node) {
-                // We don't snap to 0 immediately to avoid glitches?
-                // Actually, for a simple reset, snapping is safer than blending from unknown state without a complex mixer.
-                // But to be "less stiff", we might rely on the next frame's LERP to fix it.
-                // However, if the new action DOESN'T touch this bone, it stays 0.
-                // Example: Greet uses RightArm. Idle uses RightArm.
-                // If we switch Greet->Idle, Idle will LERP it.
-                // If we have an action that ignores arms, they snap to 0. That is acceptable.
                 // node.rotation.set(0, 0, 0);
             }
         });
@@ -84,14 +191,17 @@ export class AnimationController {
     // --- Actions ---
 
     _animateIdle(dt) {
-        // Breathing: Sine wave on spine/chest
+        // If FBX Idle is playing, we don't need the procedural breathing/arm sway
+        if (this.idleAction && this.idleAction.isRunning()) {
+            return;
+        }
+
+        // Breathing: Sine wave on spine/chest (Fallback)
         const s = Math.sin(this.actionTimer * 1.0) * 0.05;
         this._rotateBone('spine', s, 'x');
         this._rotateBone('chest', s, 'x');
 
         // Arms: Relaxed at sides (A-Poseish / Natural Stand)
-        // Target: Z = -1.2 (Right), 1.2 (Left)
-        // We use LERP for smooth entry into Idle
         this._lerpBoneRotation('rightUpperArm', 'z', -1.2, dt * 5);
         this._lerpBoneRotation('leftUpperArm', 'z', 1.2, dt * 5);
 
