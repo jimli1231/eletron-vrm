@@ -111,7 +111,7 @@ function speakText(text) {
 
 if (window.electronAPI) {
     window.electronAPI.onSpeechDelta((delta) => {
-        outputBox.innerText += delta;
+        outputBox.insertAdjacentText('beforeend', delta);
 
         // TTS Buffering
         for (const char of delta) {
